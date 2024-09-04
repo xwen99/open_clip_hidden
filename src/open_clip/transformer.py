@@ -605,7 +605,7 @@ class VisionTransformer(nn.Module):
 
         return pooled, tokens
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, output_hidden_states: bool = False):
         x = self.conv1(x)  # shape = [*, width, grid, grid]
         x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
@@ -617,7 +617,16 @@ class VisionTransformer(nn.Module):
 
         x = self.patch_dropout(x)
         x = self.ln_pre(x)
-        x = self.transformer(x)
+
+        # x = self.transformer(x)
+        hidden_states = []
+        for layer in self.transformer.resblocks:
+            if output_hidden_states:
+                hidden_states.append(x)
+            x = layer(x)
+
+        if output_hidden_states:
+            hidden_states.append(x)
 
         if self.attn_pool is not None:
             if self.attn_pool_contrastive is not None:
@@ -645,9 +654,9 @@ class VisionTransformer(nn.Module):
             pooled = pooled @ self.proj
 
         if self.output_tokens:
-            return pooled, tokens
+            return pooled, tokens, hidden_states if output_hidden_states else None
         
-        return pooled
+        return pooled, hidden_states if output_hidden_states else None
 
 
 def text_global_pool(x, text: Optional[torch.Tensor] = None, pool_type: str = 'argmax'):
